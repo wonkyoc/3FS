@@ -1,0 +1,75 @@
+implementation_type = 'RPC'
+chunk_checksum_type = 'CRC32C'
+create_net_client_for_updates = false
+max_inline_read_bytes = '0'
+max_inline_write_bytes = '0'
+max_read_io_bytes = '0'
+
+[net_client]
+default_timeout = '30s'
+enable_rdma_control = true
+force_use_tcp = false
+
+[net_client.io_worker]
+num_event_loop = 1
+rdma_connect_timeout = '5s'
+tcp_connect_timeout = '1s'
+
+[net_client.io_worker.ibsocket]
+max_rdma_wr = 1024
+max_rdma_wr_per_post = 128
+max_rd_atomic = 16
+buf_size = 16384
+send_buf_cnt = 32
+buf_ack_batch = 8
+buf_signal_batch = 8
+event_ack_batch = 128
+retry_cnt = 7
+rnr_retry = 0
+timeout = 14
+sl = 0
+
+[net_client.io_worker.transport_pool]
+max_connections = 16
+
+[net_client.thread_pool]
+num_io_threads = 16
+num_proc_threads = 16
+num_bg_threads = 2
+num_connect_threads = 4
+
+[retry]
+init_wait_time = '100ms'
+max_wait_time = '1s'
+max_retry_time = '30s'
+max_failures_before_failover = 1
+
+[traffic_control.write]
+max_batch_size = 128
+max_batch_bytes = '512MB'
+max_concurrent_requests = 128
+max_concurrent_requests_per_server = 128
+
+[traffic_control.read]
+max_batch_size = 128
+max_batch_bytes = '512MB'
+max_concurrent_requests = 128
+max_concurrent_requests_per_server = 128
+
+[traffic_control.query]
+max_batch_size = 128
+max_batch_bytes = '512MB'
+max_concurrent_requests = 32
+max_concurrent_requests_per_server = 32
+
+[traffic_control.remove]
+max_batch_size = 128
+max_batch_bytes = '512MB'
+max_concurrent_requests = 32
+max_concurrent_requests_per_server = 32
+
+[traffic_control.truncate]
+max_batch_size = 128
+max_batch_bytes = '512MB'
+max_concurrent_requests = 32
+max_concurrent_requests_per_server = 32

@@ -313,6 +313,9 @@ class StorageBench : public test::UnitTestFabric {
     std::vector<net::IBConfig::Subnet> subnets;
 
     for (const auto &ibnetZoneStr : benchOptions_.ibnetZones) {
+      if (boost::trim_copy(ibnetZoneStr).empty()) {
+        continue;
+      }
       std::vector<std::string> ibnetZoneSubnet;
       boost::split(ibnetZoneSubnet, ibnetZoneStr, boost::is_any_of(":"));
 
@@ -337,8 +340,8 @@ class StorageBench : public test::UnitTestFabric {
 
     net::IBConfig ibConfig;
     ibConfig.set_subnets(subnets);
-    ibConfig.set_allow_unknown_zone(false);
-    ibConfig.set_default_network_zone("$HF3FS_NETWORK_ZONE");
+    ibConfig.set_allow_unknown_zone(true);
+    ibConfig.set_default_network_zone("UNKNOWN");
     ibConfig.set_device_filter(benchOptions_.ibvDevices);
     ibConfig.set_default_pkey_index(benchOptions_.defaultPKeyIndex);
 

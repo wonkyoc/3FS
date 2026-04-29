@@ -6,14 +6,10 @@ This section provides a manual deployment guide for setting up a six-node cluste
 
 ### Hardware specifications
 
-| Node     | OS            | IP           | Memory | SSD        | RDMA  |
-|----------|---------------|--------------|--------|------------|-------|
-| meta       | Ubuntu 22.04  | 192.168.1.1  | 128GB  | -          | RoCE  |
-| storage1   | Ubuntu 22.04  | 192.168.1.2  | 512GB  | 14TB × 16  | RoCE  |
-| storage2   | Ubuntu 22.04  | 192.168.1.3  | 512GB  | 14TB × 16  | RoCE  |
-| storage3   | Ubuntu 22.04  | 192.168.1.4  | 512GB  | 14TB × 16  | RoCE  |
-| storage4   | Ubuntu 22.04  | 192.168.1.5  | 512GB  | 14TB × 16  | RoCE  |
-| storage5   | Ubuntu 22.04  | 192.168.1.6  | 512GB  | 14TB × 16  | RoCE  |
+| Machine | Node    | OS           | IP            | Memory | SSD     | RDMA |
+| ------- | ------- | ------------ | ------------- | ------ | ------- | ---- |
+| xsel01  | meta    | Ubuntu 22.04 | 192.168.100.1 | 128GB  | 2TB × 1 | RoCE |
+| xsel02  | storage | Ubuntu 22.04 | 192.168.100.2 | 128GB  | 2TB × 2 | RoCE |
 
 > **RDMA Configuration**
 > 1. Assign IP addresses to RDMA NICs. Multiple RDMA NICs (InfiniBand or RoCE) are supported on each node.
@@ -139,11 +135,11 @@ Install `mgmtd` service on **meta** node.
    - Set monitor address in [`mgmtd_main.toml`](../configs/mgmtd_main.toml):
    ```toml
    [common.monitor.reporters.monitor_collector]
-   remote_ip = "192.168.1.1:10000"
+   remote_ip = "192.168.100.1:10000"
    ```
 3. Initialize the cluster:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml "init-cluster --mgmtd /opt/3fs/etc/mgmtd_main.toml 1 1048576 16"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml "init-cluster --mgmtd /opt/3fs/etc/mgmtd_main.toml 1 4194304 2"
    ```
 
    The parameters of `admin_cli`:
@@ -159,7 +155,7 @@ Install `mgmtd` service on **meta** node.
    ```
 5. Run `list-nodes` command to check if the cluster has been successfully initialized:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "list-nodes"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "list-nodes"
    ```
 
 If multiple instances of `mgmtd` services deployed, one of the `mgmtd` services is elected as the primary; others are secondaries. Automatic failover occurs when the primary fails.
@@ -179,22 +175,22 @@ Install `meta` service on **meta** node.
    cluster_id = "stage"
 
    [mgmtd_client]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
    ```
    - Set mgmtd and monitor addresses in [`meta_main.toml`](../configs/meta_main.toml).
    ```toml
    [server.mgmtd_client]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
 
    [common.monitor.reporters.monitor_collector]
-   remote_ip = "192.168.1.1:10000"
+   remote_ip = "192.168.100.1:10000"
 
    [server.fdb]
    clusterFile = '/opt/3fs/etc/fdb.cluster'
    ```
 3. Config file of meta service is managed by mgmtd service. Use `admin_cli` to upload the config file to mgmtd:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "set-config --type META --file /opt/3fs/etc/meta_main.toml"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "set-config --type META --file /opt/3fs/etc/meta_main.toml"
    ```
 4. Start meta service:
    ```bash
@@ -203,7 +199,7 @@ Install `meta` service on **meta** node.
    ```
 5. Run `list-nodes` command to check if meta service has joined the cluster:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "list-nodes"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "list-nodes"
    ```
 
 If multiple instances of `meta` services deployed, meta requests will be evenly distributed to all instances.
@@ -211,12 +207,22 @@ If multiple instances of `meta` services deployed, meta requests will be evenly 
 ---
 ## Step 6: Storage service
 Install `storage` service on **storage** node.
-1. Format the attached 16 SSDs as XFS and mount at `/storage/data{1..16}`, then create data directories `/storage/data{1..16}/3fs` and log directory `/var/log/3fs`.
+1. Format the attached SSDs as XFS and mount them at `/storage/data{1..2}`, then create data directories `/storage/data{1..2}/3fs` and log directory `/var/log/3fs`.
+   For a single-node setup, map `/dev/nvme0n1` to `/storage/data1` and `/dev/nvme1n1` to `/storage/data2`:
    ```bash
-   mkdir -p /storage/data{1..16}
    mkdir -p /var/log/3fs
-   for i in {1..16};do mkfs.xfs -L data${i} -s size=4096 /dev/nvme${i}n1;mount -o noatime,nodiratime -L data${i} /storage/data${i};done
-   mkdir -p /storage/data{1..16}/3fs
+   mkdir -p /storage/data1 /storage/data2
+
+   umount /storage/data1 || true
+   umount /storage/data2 || true
+
+   mkfs.xfs -f -L data1 -s size=4096 /dev/nvme0n1
+   mkfs.xfs -f -L data2 -s size=4096 /dev/nvme1n1
+
+   mount -o noatime,nodiratime -L data1 /storage/data1
+   mount -o noatime,nodiratime -L data2 /storage/data2
+
+   mkdir -p /storage/data1/3fs /storage/data2/3fs
    ```
 2. Increase the max number of asynchronous aio requests:
    ```bash
@@ -234,22 +240,22 @@ Install `storage` service on **storage** node.
    cluster_id = "stage"
 
    [mgmtd_client]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
    ```
    - Add target paths in [`storage_main.toml`](../configs/storage_main.toml):
    ```toml
    [server.mgmtd]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
 
    [common.monitor.reporters.monitor_collector]
-   remote_ip = "192.168.1.1:10000"
+   remote_ip = "192.168.100.1:10000"
 
    [server.targets]
-   target_paths = ["/storage/data1/3fs","/storage/data2/3fs","/storage/data3/3fs","/storage/data4/3fs","/storage/data5/3fs","/storage/data6/3fs","/storage/data7/3fs","/storage/data8/3fs","/storage/data9/3fs","/storage/data10/3fs","/storage/data11/3fs","/storage/data12/3fs","/storage/data13/3fs","/storage/data14/3fs","/storage/data15/3fs","/storage/data16/3fs",]
+   target_paths = ["/storage/data1/3fs","/storage/data2/3fs",]
    ```
 5. Config file of storage service is managed by mgmtd service. Use `admin_cli` to upload the config file to mgmtd:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "set-config --type STORAGE --file /opt/3fs/etc/storage_main.toml"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "set-config --type STORAGE --file /opt/3fs/etc/storage_main.toml"
    ```
 6. Start storage service:
    ```bash
@@ -258,45 +264,55 @@ Install `storage` service on **storage** node.
    ```
 7. Run `list-nodes` command to check if storage service has joined the cluster:
    ```
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "list-nodes"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "list-nodes"
    ```
 
 ---
 ## Step 7: Create admin user, storage targets and chain table
 1. Create an admin user:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "user-add --root --admin 0 root"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "user-add --root --admin 0 root"
    ```
    The admin token is printed to the console, save it to `/opt/3fs/etc/token.txt`.
-2. Generate `admin_cli` commands to create storage targets on 5 storage nodes (16 SSD per node, 6 targets per SSD).
-   - Follow instructions at [here](data_placement/README.md) to install Python packages.
+2. Generate `admin_cli` commands to create storage targets and a simple chain table.
+   For a single-node setup with storage node `10001` and two disks, `data_placement.py` is not required. Create one target per disk and one chain per target:
    ```bash
-   pip install -r ~/3fs/deploy/data_placement/requirements.txt
-   python ~/3fs/deploy/data_placement/src/model/data_placement.py \
-      -ql -relax -type CR --num_nodes 5 --replication_factor 3 --min_targets_per_disk 6
-   python ~/3fs/deploy/data_placement/src/setup/gen_chain_table.py \
-      --chain_table_type CR --node_id_begin 10001 --node_id_end 10005 \
-      --num_disks_per_node 16 --num_targets_per_disk 6 \
-      --target_id_prefix 1 --chain_id_prefix 9 \
-      --incidence_matrix_path output/DataPlacementModel-v_5-b_10-r_6-k_3-λ_2-lb_1-ub_1/incidence_matrix.pickle
+   mkdir -p output
+
+   printf '%s\n' \
+     'create-target --node-id 10001 --disk-index 0 --target-id 1000101001 --chain-id 1000101001' \
+     'create-target --node-id 10001 --disk-index 1 --target-id 1000102001 --chain-id 1000102001' \
+     > output/create_target_cmd.txt
+
+   printf '%s\n' \
+     'ChainId,TargetId' \
+     '1000101001,1000101001' \
+     '1000102001,1000102001' \
+     > output/generated_chains.csv
+
+   printf '%s\n' \
+     'ChainId' \
+     '1000101001' \
+     '1000102001' \
+     > output/generated_chain_table.csv
    ```
    The following 3 files will be generated in `output` directory: `create_target_cmd.txt`, `generated_chains.csv`, and `generated_chain_table.csv`.
 3. Create storage targets:
    ```bash
-   /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") < output/create_target_cmd.txt
+   /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") < output/create_target_cmd.txt
    ```
 4. Upload chains to mgmtd service:
    ```bash
-   /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") "upload-chains output/generated_chains.csv"
+   /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") "upload-chains output/generated_chains.csv"
    ```
 5. Upload chain table to mgmtd service:
     ```bash
-    /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") "upload-chain-table --desc stage 1 output/generated_chain_table.csv"
+    /opt/3fs/bin/admin_cli --cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' --config.user_info.token $(<"/opt/3fs/etc/token.txt") "upload-chain-table 1 output/generated_chain_table.csv --desc replica-1"
     ```
 6. List chains and chain tables to check if they have been correctly uploaded:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "list-chains"
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "list-chain-tables"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "list-chains"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "list-chain-tables"
    ```
 ---
 ## Step 8: FUSE client
@@ -318,19 +334,19 @@ For simplicity FUSE client is deployed on the **meta** node in this guide. Howev
    token_file = '/opt/3fs/etc/token.txt'
 
    [mgmtd_client]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
    ```
 4. Set mgmtd and monitor address in [`hf3fs_fuse_main.toml`](../configs/hf3fs_fuse_main.toml).
    ```toml
    [mgmtd]
-   mgmtd_server_addresses = ["RDMA://192.168.1.1:8000"]
+   mgmtd_server_addresses = ["RDMA://192.168.100.1:8000"]
 
    [common.monitor.reporters.monitor_collector]
-   remote_ip = "192.168.1.1:10000"
+   remote_ip = "192.168.100.1:10000"
    ```
 5. Config file of FUSE client is also managed by mgmtd service. Use `admin_cli` to upload the config file to mgmtd:
    ```bash
-   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.1.1:8000"]' "set-config --type FUSE --file /opt/3fs/etc/hf3fs_fuse_main.toml"
+   /opt/3fs/bin/admin_cli -cfg /opt/3fs/etc/admin_cli.toml --config.mgmtd_client.mgmtd_server_addresses '["RDMA://192.168.100.1:8000"]' "set-config --type FUSE --file /opt/3fs/etc/hf3fs_fuse_main.toml"
    ```
 6. Start FUSE client:
    ```bash

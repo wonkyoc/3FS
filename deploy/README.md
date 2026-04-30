@@ -8,8 +8,9 @@ This section provides a manual deployment guide for setting up a six-node cluste
 
 | Machine | Node    | OS           | IP            | Memory | SSD     | RDMA |
 | ------- | ------- | ------------ | ------------- | ------ | ------- | ---- |
-| xsel01  | meta    | Ubuntu 22.04 | 192.168.100.1 | 128GB  | 2TB × 1 | RoCE |
-| xsel02  | storage | Ubuntu 22.04 | 192.168.100.2 | 128GB  | 2TB × 2 | RoCE |
+| xsel01  | meta    | Ubuntu 22.04 | 192.168.100.1 | 128GB  | 2TB × 2 | RoCE |
+| xsel01  | storage | Ubuntu 22.04 | 192.168.100.1 | 128GB  | 2TB × 2 | RoCE |
+| xsel02  | client | Ubuntu 22.04 | 192.168.100.2 | 128GB  | 2TB × 1 | RoCE |
 
 > **RDMA Configuration**
 > 1. Assign IP addresses to RDMA NICs. Multiple RDMA NICs (InfiniBand or RoCE) are supported on each node.

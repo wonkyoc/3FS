@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dtype", choices=("float16", "bfloat16", "float32"), default="float16")
     parser.add_argument("--block-size-mib", type=int, default=4)
     parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument(
+        "--jobs-per-shard",
+        action="store_true",
+        help="Run each shard count with one worker thread per shard.",
+    )
     parser.add_argument("--iodepth", type=int, default=96)
     parser.add_argument("--touch", action="store_true")
     parser.add_argument("--keep-going", action="store_true", help="Continue if one shard count fails.")
@@ -66,6 +71,7 @@ def shard_size_gib(args: argparse.Namespace, shards: int) -> float:
 
 
 def build_command(args: argparse.Namespace, shards: int) -> list[str]:
+    jobs = shards if args.jobs_per_shard else args.jobs
     cmd = [
         sys.executable,
         str(benchmark_script()),
@@ -84,7 +90,7 @@ def build_command(args: argparse.Namespace, shards: int) -> list[str]:
         "--block-size-mib",
         str(args.block_size_mib),
         "--jobs",
-        str(args.jobs),
+        str(jobs),
         "--iodepth",
         str(args.iodepth),
         "--overwrite",
